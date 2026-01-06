@@ -100,25 +100,58 @@ class DataCleaning:
 
                 return self.df
             
-            def create_ipk_rata_rata(self):
-                """Create IPK_RATA_RATA columns for all IPK columns"""
-                if self.df is None:
-                    print("Data belum dimuat")
-                    return None
+    def create_ipk_rata_rata(self):
+        """Create IPK_RATA_RATA columns for all IPK columns"""
+        if self.df is None:
+            print("Data belum dimuat")
+            return None
                 
-                print("Membuat kolom IPK_RATA_RATA...")
+        print("Membuat kolom IPK_RATA_RATA...")
 
-                # Find all IPK columns
-                ipk_columns = [col for col in self.df.columns if 'IPK' in col]
+        # Find all IPK columns
+        ipk_columns = [col for col in self.df.columns if 'IPK' in col]
 
-                if ipk_columns:
-                    ipk_data = self.df[ipk_columns]
-                    ipk_data_replaced = ipk_data.replace(0, np.nan)
-                    self.df['IPK_RATA_RATA'] = ipk_data_replaced.mean(axis = 1)
-                    self.df['IPK_RATA_RATA']= self.df['IPK_RATA_RATA'].fillna(0)
-                    print(f"Kolom IPK_RATA_RATA berhasil dibuat. Rata-rata: {self.df['IPK_RATA_RATA'].mean():.2f}")
-                else:
-                    print("Tidak ditemukan kolom IPK")
-                    self.df['IPK_RATA_RATA'] = 0
+        if ipk_columns:
+            ipk_data = self.df[ipk_columns]
+            ipk_data_replaced = ipk_data.replace(0, np.nan)
+            self.df['IPK_RATA_RATA'] = ipk_data_replaced.mean(axis = 1)
+            self.df['IPK_RATA_RATA']= self.df['IPK_RATA_RATA'].fillna(0)
+            print(f"Kolom IPK_RATA_RATA berhasil dibuat. Rata-rata: {self.df['IPK_RATA_RATA'].mean():.2f}")
+        else:
+            print("Tidak ditemukan kolom IPK")
+            self.df['IPK_RATA_RATA'] = 0
 
-                return self.df 
+        return self.df 
+
+    def finalize_selected_features(self):
+        """Select final features as specified"""
+        if self.df is None:
+            print("Data belum dimuat!")
+            return None
+                
+        final_features = ['ASAL_PROVINSI', 'ASAL_KOTA', 'KERJA_AYAH', 'PENGHASILAN_KATEGORI',
+                            'BEASISWA_KIPK', 'PRODI', 'SEKOLAH_JURUSAN', 'ASAL_SEKOLAH', 
+                          'JENIS_SELEKSI', 'IPK_RATA_RATA']
+                
+        # Keep the final features exist
+        existing_features = [col for col in final_features if col in self.df.columns]
+        self.cleaned_df = self.df[existing_features].copy()
+
+        print(f"Final features: {existing_features}")
+        print(f"Final dataset shape: {self.clened_df.shape}")
+
+        return self.cleaned_df
+    
+    def run_cleaning(self):
+        print("MEMULAI DATA CLEANING")
+
+        self.load_data()
+        self.select_features()
+        self.handle_missing_values()
+        self.handle_outliers()
+        self.create_ipk_rata_rata()
+        self.finalize_selected_features()
+
+if __name__ == "__main__":
+    cleaner = DataCleaning()
+    cleaned_data = cleaner.run_cleaning()
