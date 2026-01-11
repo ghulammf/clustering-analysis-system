@@ -5,22 +5,30 @@ import joblib
 import os
 
 class DataTransformation:
-    def __init__(self, file_path=''):
-        self.file_path = file_path
-        self.df = None
+    def __init__(self, df=None):
+        # self.file_path = file_path
+        self.df = df
         self.transformed_df = None
         self.label_encoders = {}
         self.onehot_encoders = {}
 
-    def load_cleaned_data(self):
+    def load_cleaned_data(self, df):
         """Load cleaned data"""
-        try:
-            self.df = pd.read_csv(self.file_path)
-            print("Data berhasil dimuat")
-            return self.df
-        except FileNotFoundError:
-            print(f"File {self.file_path} tidak ditemukan")
+        if df is None:
+            print("Data kosong!")
             return None
+        
+        self.df = df.copy()
+        print(f"Data berhasil dimuat. Shape: {self.df}")
+        print(f"Kolom: {list(self.df.columns)}")
+        return self.df
+        # try:
+        #     self.df = pd.read_csv(self.file_path)
+        #     print("Data berhasil dimuat")
+        #     return self.df
+        # except FileNotFoundError:
+        #     print(f"File {self.file_path} tidak ditemukan")
+        #     return None
         
     def encode_categorical_variables(self, method='label'):
         """Encode categorical variables"""
@@ -160,21 +168,17 @@ class DataTransformation:
         
         return self.transformed_df
     
-    def save_transformed_data(self, output_path='data/transformed_data.csv'):
-        """Save transformed data"""
-        if self.transformed_df is not None:
-            self.transformed_df.to_csv(output_path, index=False)
-            print(f"Data transformed disimpan ke {output_path}")
-            
-            # Save encoders
-            if self.label_encoders:
-                joblib.dump(self.label_encoders, 'label_encoders.pkl')
-                print("Label encoders disimpan ke label_encoders.pkl")
-            
-            return True
-        else:
-            print("Tidak ada data yang disimpan!")
-            return False
+    def save_artifacts(self):
+        """Save ML artifacs (encoders, scaler, model)"""
+
+        if self.label_encoders:
+            joblib.dump(self.label_encoders, 'label_encoders.pkl')
+
+        if hasattr(self, 'scaler') and self.scaler is not None:
+            joblib.dump(self.scaler, 'scaler.pkl')
+
+        if hasattr(self, 'model') and self.model is not None:
+            joblib.dump(self.model, 'model.pkl')
         
     def run_full_transformation(self, encoding_method='label'):
         """Run the complete data transformation pipeline"""
