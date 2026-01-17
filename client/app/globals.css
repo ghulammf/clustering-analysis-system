@@ -1,5 +1,9 @@
 @import "tailwindcss";
 
+@import "primereact/resources/themes/lara-light-blue/theme.css";
+@import "primereact/resources/primereact.min.css";
+@import "primeicons/primeicons.css";
+
 :root {
   /* --background: #ffffff; */
   --background: linear-gradient(135deg, #667eea 0%, #764ba2 50%, #f093fb 100%);
