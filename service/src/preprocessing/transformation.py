@@ -11,31 +11,26 @@ class DataTransformation:
         self.transformed_df = None
         self.label_encoders = {}
         self.onehot_encoders = {}
+        self.messages= []
 
     def load_cleaned_data(self, df):
         """Load cleaned data"""
         if df is None:
-            print("Data kosong!")
+            self.messages.append("Data kosong!")
             return None
         
         self.df = df.copy()
-        print(f"Data berhasil dimuat. Shape: {self.df}")
-        print(f"Kolom: {list(self.df.columns)}")
+        self.messages.append(f"Memuat data cleaning")
         return self.df
-        # try:
-        #     self.df = pd.read_csv(self.file_path)
-        #     print("Data berhasil dimuat")
-        #     return self.df
-        # except FileNotFoundError:
-        #     print(f"File {self.file_path} tidak ditemukan")
-        #     return None
         
     def encode_categorical_variables(self, method='label'):
         """Encode categorical variables"""
         if self.df is None:
-            print("Data belum dimuat")
+            self.messages.append("Data belum dimuat")
             return None
         
+        self.messages.append("Encoding variabel kategorikal")
+
         categorical_cols = self.df.select_dtypes(include=['object']).columns.tolist()
 
         if method == 'label':
@@ -55,10 +50,12 @@ class DataTransformation:
     def create_binary_features(self):
         """Create binary features from categorical data"""
         if self.df is None:
-            print("Data belum dimuat!")
+            self.messages.append("Data belum dimuat!")
             return None
         
-        if 'ASAL_PROVINSI' in self.columns:
+        self.messages.append("Create binary fitur")
+        
+        if 'ASAL_PROVINSI' in self.df.columns:
             self.df['ASAL_JAWA_TIMUR'] = (self.df['ASAL_PROVINSI'] == 'Jawa Timur').astype(int)
             print(f"ASAL_JAWA_TIMUR: {self.df['ASAL_JAWA_TIMUR'].sum()} mahasiswa dari Jawa Timur")
         
@@ -75,10 +72,10 @@ class DataTransformation:
     def create_interaction_features(self):
         """Create interaction features"""
         if self.df is None:
-            print("Data belum dimuat!")
+            self.messages.append("Data belum dimuat!")
             return None
             
-        print("Membuat fitur interaksi...")
+        self.messages.append("Create fitur interaksi")
 
         if all(col in self.df.columns for col in ['PENGHASILAN_KATEGORI_ENCODED', 'BEASISWA_KIPK']):
             self.df['PENGHASILAN_BEASISWA_INTERACTION'] = self.df['PENGHASILAN_KATEGORI_ENCODED'] * self.df['BEASISWA_KIPK']
@@ -91,7 +88,7 @@ class DataTransformation:
     def create_binned_features(self):
         """Create binned/grouped features"""
         if self.df is None:
-            print("Data belum dimuat!")
+            print("Data belum dimuat! binned_features")
             return None
         
         # Bin IPK into categories
@@ -134,10 +131,10 @@ class DataTransformation:
     def aggregate_school_features(self):
         """Aggregate school-related features"""
         if self.df is None:
-            print("Data belum dimuat!")
+            print("Data belum dimuat! aggregate_school")
             return None
             
-        print("Meng-agregasi fitur sekolah...")
+        self.messages.append("Agregasi fitur sekolah")
         
         # Count students from each school
         if 'ASAL_SEKOLAH' in self.df.columns:
@@ -155,7 +152,7 @@ class DataTransformation:
     def finalize_transformed_data(self):
         """Create final transformed dataset"""
         if self.df is None:
-            print("Data belum dimuat!")
+            print("Data belum dimuat! finalize_transformed")
             return None
             
         # Select only numerical columns for modeling
@@ -163,8 +160,9 @@ class DataTransformation:
         
         self.transformed_df = self.df[numerical_cols].copy()
         
-        print(f"Dataset setelah transformasi: {self.transformed_df.shape}")
-        print(f"Kolom numerik: {list(self.transformed_df.columns)}")
+        # print(f"Dataset setelah transformasi: {self.transformed_df.shape}")
+        # print(f"Kolom numerik: {list(self.transformed_df.columns)}")
+        self.messages.append("Finalisasi transformasi data")
         
         return self.transformed_df
     
@@ -180,14 +178,12 @@ class DataTransformation:
         if hasattr(self, 'model') and self.model is not None:
             joblib.dump(self.model, 'model.pkl')
         
-    def run_full_transformation(self, encoding_method='label'):
+    def run_full_transformation(self, df, encoding_method='label', return_result=False):
         """Run the complete data transformation pipeline"""
-        print("="*50)
-        print("MEMULAI TRANSFORMASI DATA")
-        print("="*50)
+        self.messages.append("MEMULAI TRANSFORMASI DATA")
         
         # Step 1: Load cleaned data
-        self.load_cleaned_data()
+        self.load_cleaned_data(df)
         
         if self.df is not None:
             # Step 2: Encode categorical variables
@@ -209,17 +205,21 @@ class DataTransformation:
             self.finalize_transformed_data()
             
             # Step 8: Save transformed data
-            self.save_transformed_data()
+            self.save_artifacts()
             
-            print("="*50)
             print("TRANSFORMASI DATA SELESAI")
-            print("="*50)
             
-            return self.transformed_df
+            if return_result:
+                return self.transformed_df
+            
+            return self.response()
         else:
             print("Gagal memuat data untuk transformasi!")
             return None
 
-if __name__ == "__main__":
-    transformer = DataTransformation()
-    transformed_data = transformer.run_full_transformation(encoding_method='label')
+    def response(self):
+        return{
+            "status": "success",
+            "messages": self.messages,
+            "data_preview": self.transformed_df.head(5).to_dict(orient="records")
+        }
