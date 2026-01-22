@@ -10,6 +10,7 @@ class DataCleaning:
         self.df = None
         self.cleaned_df = None
         self.messages = []
+        self.summary = {"missing_values": {}, "ipk_statistics": {}, "outliers": {}}
 
     def load_data(self):
         """Load data from csv"""
@@ -78,7 +79,7 @@ class DataCleaning:
         self.messages.append("Menangani missing values")
 
         # Informasi missing values sebelum cleaning
-        missing_before = self.df.isnull().sum().sum()
+        missing_before = self.df.isnull().mean() * 100
         # self.messages.append(f"Total missing values sebelum cleaning: {missing_before}")
 
         # 1. Kolom IPK, ganti NaN dengan 0
@@ -92,46 +93,87 @@ class DataCleaning:
             self.df[col] = self.df[col].fillna("Tidak Diketahui")
 
         # 3. Untuk kolom numerik selain IPK, ganti dengan median
+
+        # numeric_cols = self.df.select_dtypes(include=[np.number]).columns
+        # numeric_cols = [col for col in numeric_cols if "IPK" not in col]
+        # for col in numeric_cols:
+        #     self.df[col] = self.df[col].fillna(self.df[col].median())
+
         numeric_cols = self.df.select_dtypes(include=[np.number]).columns
-        numeric_cols = [col for col in numeric_cols if "IPK" not in col]
-        for col in numeric_cols:
-            self.df[col] = self.df[col].fillna(self.df[col].median())
+        numeric_cols = [
+            col for col in numeric_cols if "IPK" not in col and col != "BEASISWA_KIPK"
+        ]
 
         # Missing values after cleaning
-        missing_after = self.df.isnull().sum().sum()
+        missing_after = self.df.isnull().mean() * 100
         # self.messages.append(f"Total missing values setelah cleaning: {missing_after}")
         # self.messages.append(f"Total missing values: sebelum: {missing_before}, sesudah: {missing_after}")
+
+        self.summary["missing_values"] = {
+            col: {
+                "before_pct": round(missing_before[col], 2),
+                "after_pct": round(missing_after[col], 2),
+            }
+            for col in self.df.columns
+        }
+
         return self.df
 
     def handle_outliers(self):
-        """Handle outliers in numerical columns"""
+        """Handle outliers in numerical columns (exclude binary & ID columns)"""
+
         if self.df is None:
             self.messages.append("Data belum dimuat")
             return None
 
         self.messages.append("Menangani outliers")
 
-        # Only process numerical columns that are not IDs or similar
+        # Ambil kolom numerik
         numerical_cols = self.df.select_dtypes(include=[np.number]).columns
 
+        # Kolom yang TIDAK boleh diproses outlier
+        excluded_cols = [
+            "TAHUN ANGKATAN",  # ID / kategori waktu
+            "BEASISWA_KIPK",  # variabel biner (0/1)
+        ]
+
+        outlier_summary = {}
+
         for col in numerical_cols:
-            if col != "TAHUN ANGKATAN":
-                Q1 = self.df[col].quantile(0.25)
-                Q3 = self.df[col].quantile(0.75)
-                IQR = Q3 - Q1
+            # Skip kolom yang dikecualikan
+            if col in excluded_cols:
+                continue
 
-                # Define bounds
-                lower_bound = Q1 - 1.5 * IQR
-                upper_bound = Q3 + 1.5 * IQR
+            # Hitung Q1, Q3, IQR
+            Q1 = self.df[col].quantile(0.25)
+            Q3 = self.df[col].quantile(0.75)
+            IQR = Q3 - Q1
 
-                # Cap outliers
-                self.df[col] = np.where(
-                    self.df[col] < lower_bound, lower_bound, self.df[col]
-                )
-                self.df[col] = np.where(
-                    self.df[col] > upper_bound, upper_bound, self.df[col]
-                )
+            # Jika IQR = 0, tidak perlu outlier handling
+            if IQR == 0:
+                outlier_summary[col] = 0
+                continue
 
+            # Tentukan batas
+            lower_bound = Q1 - 1.5 * IQR
+            upper_bound = Q3 + 1.5 * IQR
+
+            # Cap outliers
+            # self.df[col] = np.where(
+            #     self.df[col] < lower_bound, lower_bound, self.df[col]
+            # )
+
+            # self.df[col] = np.where(
+            #     self.df[col] > upper_bound, upper_bound, self.df[col]
+            # )
+            outliers = (
+                (self.df[col] < lower_bound) | (self.df[col] > upper_bound)
+            ).sum()
+            outlier_summary[col] = int(outliers)
+
+            self.df[col] = np.clip(self.df[col], lower_bound, upper_bound)
+
+        self.summary["outliers"] = outlier_summary
         return self.df
 
     def create_ipk_rata_rata(self):
@@ -155,6 +197,14 @@ class DataCleaning:
             self.messages.append("Tidak ditemukan kolom IPK")
             self.df["IPK_RATA_RATA"] = 0
 
+        self.summary["ipk_statistics"] = {
+            "mean": round(self.df["IPK_RATA_RATA"].mean(), 3),
+            "median": round(self.df["IPK_RATA_RATA"].median(), 3),
+            "std": round(self.df["IPK_RATA_RATA"].std(), 3),
+            "min": round(self.df["IPK_RATA_RATA"].min(), 3),
+            "max": round(self.df["IPK_RATA_RATA"].max(), 3),
+        }
+
         return self.df
 
     def finalize_selected_features(self):
@@ -177,12 +227,20 @@ class DataCleaning:
         ]
 
         # Buat BEASISWA_IPK jika belum ada
-        if "BEASISWA_LAIN" in self.df.columns and "BEASISWA_KIPK" in self.df.columns:
-            self.df["BEASISWA_IPK"] = self.df[["BEASISWA_LAIN", "BEASISWA_KIPK"]].max(
-                axis=1
-            )
-        elif "BEASISWA_IPK" not in self.df.columns:
-            self.df["BEASISWA_IPK"] = 0
+        # kode lama
+        # if "BEASISWA_LAIN" in self.df.columns and "BEASISWA_KIPK" in self.df.columns:
+        #     self.df["BEASISWA_KIPK"] = self.df[["BEASISWA_LAIN", "BEASISWA_KIPK"]].max(
+        #         axis=1
+        #     )
+        # elif "BEASISWA_KIPK" not in self.df.columns:
+        #     self.df["BEASISWA_KIPK"] = 0
+
+        # kode revisi
+        if "BEASISWA_KIPK" not in self.df.columns:
+            self.df["BEASISWA_KIPK"] = 0
+        else:
+            # pastikan integer 0/1
+            self.df["BEASISWA_KIPK"] = self.df["BEASISWA_KIPK"].fillna(0).astype(int)
 
         # Buat IPK_RATA_RATA jika belum ada
         if "IPK_RATA_RATA" not in self.df.columns:
@@ -195,9 +253,9 @@ class DataCleaning:
                 existing_features.append(feature)
             else:
                 print(f"⚠️ Fitur {feature} tidak ditemukan, membuat default value")
-                if feature == "BEASISWA_IPK":
-                    self.df[feature] = 0
-                elif feature == "IPK_RATA_RATA":
+                # if feature == "BEASISWA_KIPK":
+                #     self.df[feature] = 0
+                if feature == "IPK_RATA_RATA":
                     self.df[feature] = 0
                 elif feature in ["PRODI", "ASAL_SEKOLAH"]:
                     self.df[feature] = "Tidak Diketahui"
@@ -225,7 +283,7 @@ class DataCleaning:
         self.create_ipk_rata_rata()
         result = self.finalize_selected_features()
 
-        print("clenaing selesai")
+        print("cleaning selesai")
 
         if return_result:
             return result
@@ -236,6 +294,7 @@ class DataCleaning:
         return {
             "status": "success",
             "messages": self.messages,
+            "summary": self.summary,
             "data_preview": self.cleaned_df.head(5).to_dict(orient="records"),
         }
 
